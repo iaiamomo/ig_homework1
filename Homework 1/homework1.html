@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+#version 300 es
+
+in vec4 aPosition;
+in vec4 aNormal;
+in vec2 aTexCoord;
+out vec2 vTexCoord;
+
+out vec3 N, E;
+out vec3 L;     //directional light
+out vec3 LS, DS;    //spotlight
+
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform mat3 uNormalMatrix;
+
+uniform vec4 uLightPosition;    //directional light position
+uniform vec4 uSpotPosition;     //spotlight position
+uniform vec4 uSpotDirection;    //spotlight direction
+
+void main()
+{
+  vec3 pos = (uModelViewMatrix * aPosition).xyz;
+
+  //DIRECTIONAL LIGHT
+  // check for directional light
+  if(uLightPosition.w == 0.0) //directional
+    L = normalize(uLightPosition.xyz);
+  else 
+    L = normalize(uLightPosition.xyz - pos);
+
+  // SPOTLIGHT
+  // check for directional light
+  if(uSpotPosition.w == 0.0) //directional
+    LS = normalize(uSpotPosition.xyz);
+  else
+    LS = normalize(uSpotPosition.xyz - pos);
+
+  DS = normalize(uSpotDirection.xyz - pos);
+  E = -normalize(pos);
+  N = normalize(uNormalMatrix*aNormal.xyz);
+
+  vTexCoord = aTexCoord;
+  
+  gl_Position = uProjectionMatrix * uModelViewMatrix * aPosition;
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+#version 300 es
+
+precision mediump float;
+
+in vec3 N, L, E;
+in vec3 LS, DS;
+
+in vec2 vTexCoord;
+out vec4 fColor;
+
+uniform sampler2D uTextureMap;
+uniform bool textureFlag;
+
+// DIRECTIONAL LIGHT
+uniform vec4 uAmbientProduct;
+uniform vec4 uDiffuseProduct;
+
+// SPOTLIGHT
+uniform vec4 uAmbientProductSpot;
+uniform vec4 uDiffuseProductSpot;
+uniform float uCutoffSpot, uThetaSpot;
+uniform float uConstantSpot, uLinearSpot, uQuadraticSpot;
+
+// GLOBAL AMBIENT PRODUCT
+uniform vec4 globalAmbientLight;
+
+void
+main()
+{
+  // DIRECTIONAL LIGHT
+  vec4 componentDir;      // Simple Cartoon Shading component
+  if(max(dot(L,N),0.0)>=0.5){
+    componentDir = (uAmbientProduct + uDiffuseProduct);
+  } else {
+    componentDir = (uAmbientProduct);
+  }
+
+  // SPOTLIGHT
+  float sp;
+  float cosPhi = max(dot(DS, -LS), 0.0);
+  float phi = acos(cosPhi);
+  float attenuation;
+  float d = length(LS);
+  float linear = uLinearSpot;
+  float quadratic = uQuadraticSpot;
+  if(linear < 0.0){
+    linear = 0.0;
+  }
+  if(quadratic < 0.0){
+    quadratic = 0.0;
+  }
+  attenuation = 1.0 / (uConstantSpot + linear * d + quadratic * pow(d,2.0));
+  if(phi < radians(uThetaSpot)){
+    float alpha = pow(cosPhi, uCutoffSpot);
+    sp = alpha * attenuation;
+  } else {
+    sp = 0.0;
+  }
+  vec4 componentSpot;     // Simple Cartoon Shading component
+  if(max(dot(LS,N),0.0)>=0.5){
+    componentSpot = (uAmbientProductSpot + uDiffuseProductSpot) * sp;
+  } else {
+    componentSpot = (uAmbientProductSpot) * sp;
+  }
+
+  vec4 textComponent = texture(uTextureMap, vTexCoord);
+
+  if(textureFlag){
+    fColor = (globalAmbientLight + componentDir + componentSpot) * textComponent;
+  }else{
+    fColor = globalAmbientLight + componentDir + componentSpot;
+  }
+
+  fColor.a = 1.0;
+}
+</script>
+
+<script type="text/javascript" src="../Common/initShaders.js"></script>
+<script type="text/javascript" src="../Common/MVnew.js"></script>
+<script type="text/javascript" src="homework1.js"></script>
+
+<body>
+
+<p> </p>
+MODELVIEW MATRIX:
+<button id = "Button1">Increase near</button>
+<button id = "Button2">Decrease near</button>
+<button id = "Button3">Increase far</button>
+<button id = "Button4">Decrease far</button>
+<p> </p>
+PROJECTION MATRIX:
+<button id = "Button5">Increase theta</button>
+<button id = "Button6">Decrease theta</button>
+<button id = "Button7">Increase phi</button>
+<button id = "Button8">Decrease phi</button>
+<p> </p>
+SPOTLIGHT:
+<p> </p>
+<button id = "Button9">Increase cutoff</button>
+<button id = "Button10">Decrese cutoff</button>
+<button id = "Button11">Increase theta</button>
+<button id = "Button12">Decrese theta</button>
+<p> </p>
+Direction of spotlight:
+<div>
+  X <input id="xSlider" type="range" min="-5" max="5" step="0.1" value="-0.5" />
+</div>
+<div>
+  Y <input id="ySlider" type="range" min="-5" max="5" step="0.1" value="0.5" />
+</div>
+<p> </p>
+Attenuation factors:
+<button id = "Button13">Increase linear</button>
+<button id = "Button14">Decrese linear</button>
+<button id = "Button15">Increase quadratic</button>
+<button id = "Button16">Decrese quadratic</button>
+<p> </p>
+TEXTURE:
+<button id = "Button17">Activate/Deactivate</button>
+<p> </p>
+<canvas id="gl-canvas" width="1024" height="1024">
+Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+<img id = "texImage" src = "minecraft.png" hidden></img>
+</body>
+</html>
